@@ -18,13 +18,37 @@ library(tidyverse)
 library(knitr)
 library(ggplot2)
 library(plotly)
+library(genius)
 ```
 
 
 
-```{r cars}
+```{r loading stream history}
+
+## Getting stream history to be flattened from a json format to a more understandable, parsed dataframe
 
 streamHistory <- fromJSON("StreamingHistory0.json", flatten = TRUE)
+
+streamHistorytest <- streamHistory %>%
+  head(1500)
+
+track_audio_features <- function(artist, title, type = "track") {
+  search_results <- search_spotify(paste(artist, title), type = type)
+  track_audio_feats <- get_track_audio_features(search_results$id[[1]]) %>%
+    dplyr::select(-id, -uri, -track_href, -analysis_url)
+  return(track_audio_feats)
+}
+# Use possibly() purrr function which can handle errors in search
+possible_af <- possibly(track_audio_features, otherwise = tibble())
+
+possible_feats <- possibly(track_audio_features, otherwise = tibble())
+
+totalaudio_features <- streamHistorytest %>%
+  mutate(audio_features = map2(artistName, trackName, possible_feats)) %>%
+  unnest() %>% 
+  as_tibble()
+
+emotions_math <- genius_album(artist = "Margaret Glaspy", album = "Emotions and Math")
 
 
 ```
@@ -133,5 +157,75 @@ dayType <- hoursDay %>%
 dayType
 
 ```
+
+
+
+
+
+```{r connecting to api}
+
+# ESTABLISH CONNECTION SPOTIFY API
+
+get_spotify_authorization_code()
+
+
+```
+
+
+
+```{r}
+library(spotifyr)
+beatles <- get_artist_audio_features('the beatles')
+
+beatles %>% 
+    count(key_mode, sort = TRUE) %>% 
+    head(5) %>% 
+    kable()
+```
+
+
+```{r}
+library(lubridate)
+
+get_my_recently_played(limit = 5) %>% 
+    mutate(artist.name = map_chr(track.artists, function(x) x$name[1]),
+           played_at = as_datetime(played_at)) %>% 
+    select(track.name, artist.name, track.album.name, played_at) %>% 
+    kable()
+```
+
+
+
+```{r}
+get_my_top_artists_or_tracks(type = 'artists', time_range = 'long_term', limit = 5) %>% 
+    select(name, genres) %>% 
+    rowwise %>% 
+    mutate(genres = paste(genres, collapse = ', ')) %>% 
+    ungroup %>% 
+    kable()
+```
+
+```{r}
+joy <- get_artist_audio_features('Tame Impala')
+joy %>% 
+    arrange(-valence) %>% 
+    select(track_name, valence) %>%
+    kable()
+```
+
+
+```{r}
+library(ggjoy)
+# 
+ggplot(joy, aes(x = valence, y = album_name)) + 
+    geom_joy() + 
+    theme_joy() +
+    ggtitle("Joyplot of Joy Division's joy distributions", subtitle = "Based on valence pulled from Spotify's Web API with spotifyr")
+```
+
+
+
+
+
 
 
